@@ -1,12 +1,13 @@
-package clientpool
+package clientPool
 
 import (
-	"client_pool/middleware"
 	"context"
 	"errors"
 	"math/rand"
 	"sync"
 	"time"
+
+	"github.com/bighu630/clientPool/middleware"
 )
 
 var NotAvailableClientError = errors.New("not available client")

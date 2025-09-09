@@ -1,7 +1,6 @@
-package clientpool
+package clientPool
 
 import (
-	"client_pool/middleware"
 	"context"
 	"fmt"
 	"log"
@@ -9,6 +8,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/bighu630/clientPool/middleware"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
@@ -290,7 +291,11 @@ func TestClientPool_TraceID(t *testing.T) {
 	}
 
 	// 测试传入已有traceID
-	ctx2 := context.WithValue(context.Background(), middleware.GetTraceID, "existing-trace-123")
+	// Use a comparable key for context.WithValue
+	type traceIDKeyType struct{}
+	var traceIDKey = traceIDKeyType{}
+
+	ctx2 := context.WithValue(context.Background(), traceIDKey, "existing-trace-123")
 	err = pool.Do(ctx2, testFn)
 	if err != nil {
 		t.Errorf("Request with existing traceID failed: %v", err)

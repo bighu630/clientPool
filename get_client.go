@@ -1,4 +1,4 @@
-package clientpool
+package clientPool
 
 import "time"
 

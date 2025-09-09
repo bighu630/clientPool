@@ -1,13 +1,14 @@
 package main
 
 import (
-	clientpool "client_pool"
-	"client_pool/middleware"
 	"context"
 	"fmt"
 	"log"
 	"net/http"
 	"time"
+
+	clientpool "github.com/bighu630/clientPool"
+	"github.com/bighu630/clientPool/middleware"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
