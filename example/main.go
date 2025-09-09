@@ -115,8 +115,6 @@ func main() {
 
 	fmt.Println("\n🚨 Demo 4: Circuit Breaker Test")
 	circuitPool := clientpool.NewClientPool[*HTTPClient](2, 3*time.Second, clientpool.RoundRobin)
-	circuitPool.RegisterMiddleware(middleware.TraceMiddleware[*HTTPClient]())
-	circuitPool.RegisterMiddleware(middleware.PrometheusMiddleware[*HTTPClient]())
 	normal := &HTTPClient{Name: "normal", Client: &http.Client{Timeout: 10 * time.Second}, URL: "https://www.bilibili.com"}
 	failing := &HTTPClient{Name: "failing", Client: &http.Client{Timeout: 1 * time.Millisecond}, URL: "https://httpstat.us/500"}
 	circuitPool.AddClient(normal, 1)
@@ -137,7 +135,6 @@ func main() {
 
 	fmt.Println("\n💥 Demo 5: Panic Recovery")
 	panicPool := clientpool.NewClientPool[*HTTPClient](3, 5*time.Second, clientpool.RoundRobin)
-	panicPool.RegisterMiddleware(middleware.TraceMiddleware[*HTTPClient]())
 	panicClient := &HTTPClient{Name: "panic-client", Client: &http.Client{Timeout: 10 * time.Second}, URL: "https://www.bilibili.com"}
 	panicPool.AddClient(panicClient, 1)
 	panicLogic := func(ctx context.Context, client *HTTPClient) error {

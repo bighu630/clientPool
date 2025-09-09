@@ -103,7 +103,6 @@ func TestClientPool_BasicFunctionality(t *testing.T) {
 
 func TestClientPool_CircuitBreaker(t *testing.T) {
 	pool := NewClientPool[*HTTPClient](2, 3*time.Second, RoundRobin)
-	pool.RegisterMiddleware(middleware.TraceMiddleware[*HTTPClient]())
 	pool.RegisterMiddleware(middleware.PrometheusMiddleware[*HTTPClient]())
 
 	normal := &HTTPClient{Name: "normal_client", Client: &http.Client{Timeout: 10 * time.Second}, URL: "https://www.bilibili.com"}
@@ -134,8 +133,6 @@ func TestClientPool_CircuitBreaker(t *testing.T) {
 
 func TestClientPool_Concurrency(t *testing.T) {
 	pool := NewClientPool[*HTTPClient](3, 5*time.Second, WeightedRandom)
-	pool.RegisterMiddleware(middleware.TraceMiddleware[*HTTPClient]())
-	pool.RegisterMiddleware(middleware.PrometheusMiddleware[*HTTPClient]())
 	pool.RegisterMiddleware(middleware.NewRateLimiterMiddleware[*HTTPClient](10, 20, 1*time.Second))
 
 	clients := []*HTTPClient{
@@ -177,7 +174,6 @@ func TestClientPool_Concurrency(t *testing.T) {
 
 func TestClientPool_PanicRecovery(t *testing.T) {
 	pool := NewClientPool[*HTTPClient](3, 5*time.Second, RoundRobin)
-	pool.RegisterMiddleware(middleware.TraceMiddleware[*HTTPClient]())
 	panicClient := &HTTPClient{Name: "panic_client", Client: &http.Client{Timeout: 10 * time.Second}, URL: "https://www.bilibili.com"}
 	pool.AddClient(panicClient, 1)
 	panicFn := func(ctx context.Context, client *HTTPClient) error {
@@ -193,29 +189,6 @@ func TestClientPool_PanicRecovery(t *testing.T) {
 		t.Error("Expected error from panic, but got nil")
 	} else {
 		fmt.Printf("Successfully recovered from panic: %v\n", err)
-	}
-}
-
-func TestClientPool_TraceID(t *testing.T) {
-	pool := NewClientPool[*HTTPClient](3, 5*time.Second, RoundRobin)
-	pool.RegisterMiddleware(middleware.TraceMiddleware[*HTTPClient]())
-	traceClient := &HTTPClient{Name: "trace_client", Client: &http.Client{Timeout: 10 * time.Second}, URL: "https://www.bilibili.com"}
-	pool.AddClient(traceClient, 1)
-	testFn := func(ctx context.Context, client *HTTPClient) error {
-		traceID := middleware.GetTraceID(ctx)
-		fmt.Printf("Business logic: traceID=%s, client=%s\n", traceID, client.Name)
-		return nil
-	}
-	fmt.Println("\n=== Testing Trace ID ===")
-	ctx1 := context.Background()
-	err := pool.Do(ctx1, testFn)
-	if err != nil {
-		t.Errorf("Request with auto traceID failed: %v", err)
-	}
-	ctx2 := context.WithValue(context.Background(), struct{}{}, "existing-trace-123")
-	err = pool.Do(ctx2, testFn)
-	if err != nil {
-		t.Errorf("Request with existing traceID failed: %v", err)
 	}
 }
 
