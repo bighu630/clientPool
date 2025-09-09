@@ -112,14 +112,6 @@ pool := clientpool.NewClientPool[string](
 
 ### 中间件系统
 
-#### 链路追踪中间件
-```go
-pool.RegisterMiddleware(middleware.TraceMiddleware[string]())
-
-// 在业务逻辑中获取 TraceID
-traceID := middleware.GetTraceID(ctx)
-fmt.Printf("TraceID: %s\n", traceID)
-```
 
 #### Prometheus 监控中间件
 ```go
@@ -230,7 +222,7 @@ go test -bench=.
 
 ## 最佳实践
 
-1. **客户端类型选择**：对于需要使用 `PrometheusMiddleware` 和 `TraceMiddleware` 的场景，客户端类型应该约束为 `~string`
+1. **客户端类型选择**：推荐使用自定义类型（如 `*HTTPClient`），Prometheus 和 Trace 中间件支持任意类型。建议通过 `context.WithValue(ctx, middleware.PrometheusClientKey{}, label)` 注入监控 label，详见 `example/main.go`。
 
 2. **中间件顺序**：按照以下顺序注册中间件以获得最佳效果：
    ```go

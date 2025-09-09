@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -39,19 +40,30 @@ func init() {
 	prometheus.MustRegister(requestsTotal, requestDuration, requestErrors)
 }
 
+type PrometheusClientKey struct{}
+
+// 从 context 获取 client label
+func GetPrometheusClientLabel(ctx context.Context, client any) string {
+	if v := ctx.Value(PrometheusClientKey{}); v != nil {
+		return fmt.Sprintf("%v", v)
+	}
+	return fmt.Sprintf("%v", client)
+}
+
 // PrometheusMiddleware 实现
-func PrometheusMiddleware[T ~string]() Middleware[T] {
+func PrometheusMiddleware[T any]() Middleware[T] {
 	return WrapMiddleware(func(ctx context.Context, client T, next func(ctx context.Context, client T) error) error {
+		label := GetPrometheusClientLabel(ctx, client)
 		start := time.Now()
-		requestsTotal.WithLabelValues(string(client)).Inc()
+		requestsTotal.WithLabelValues(label).Inc()
 
 		err := next(ctx, client)
 
 		duration := time.Since(start).Seconds()
-		requestDuration.WithLabelValues(string(client)).Observe(duration)
+		requestDuration.WithLabelValues(label).Observe(duration)
 
 		if err != nil {
-			requestErrors.WithLabelValues(string(client)).Inc()
+			requestErrors.WithLabelValues(label).Inc()
 		}
 
 		return err
