@@ -19,10 +19,7 @@
 ### 安装依赖
 
 ```go
-go mod init your-project
-go get github.com/google/uuid
-go get github.com/prometheus/client_golang
-go get golang.org/x/time
+go get github.com/bighu630/clientPool
 ```
 
 ### 基本使用
@@ -36,8 +33,8 @@ import (
     "net/http"
     "time"
     
-    clientpool "client_pool"
-    "client_pool/middleware"
+    clientpool "github.com/bighu630/clientPool"
+    "github.com/bighu630/clientPool/middleware"
 )
 
 func main() {
@@ -229,47 +226,6 @@ go test -v -run TestClientPool_Concurrency
 
 # 运行基准测试
 go test -bench=.
-```
-
-## API 文档
-
-### ClientPool[T any]
-
-主要的客户端池结构体。
-
-#### 方法
-
-- `NewClientPool[T](maxFails int, cooldown time.Duration, defaultBalancer BalancerType) *ClientPool[T]`
-  - 创建新的客户端池
-  
-- `AddClient(client T, weight int)`
-  - 添加客户端到池中
-  
-- `RegisterMiddleware(middleware Middleware[T])`
-  - 注册中间件
-  
-- `Do(ctx context.Context, fn func(context.Context, T) error) error`
-  - 使用默认负载均衡策略执行函数
-  
-- `DoRoundRobinClient(ctx context.Context, fn func(context.Context, T) error) error`
-  - 使用轮询策略执行函数
-  
-- `DoWeightedRandomClient(ctx context.Context, fn func(context.Context, T) error) error`
-  - 使用加权随机策略执行函数
-  
-- `DoRandomClient(ctx context.Context, fn func(context.Context, T) error) error`
-  - 使用随机策略执行函数
-
-### 负载均衡类型
-
-```go
-type BalancerType string
-
-const (
-    RoundRobin     BalancerType = "round_robin"
-    WeightedRandom BalancerType = "weighted_random"
-    Random         BalancerType = "random"
-)
 ```
 
 ## 最佳实践
