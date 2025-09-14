@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	cw "github.com/bighu630/clientPool/clientWrapper"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -52,8 +53,9 @@ func GetPrometheusClientLabel(ctx context.Context, client any) string {
 
 // PrometheusMiddleware 实现
 func PrometheusMiddleware[T any]() Middleware[T] {
-	return WrapMiddleware(func(ctx context.Context, client T, next func(ctx context.Context, client T) error) error {
-		label := GetPrometheusClientLabel(ctx, client)
+	return WrapMiddleware(func(ctx context.Context, client cw.ClientWrapped[T], next func(ctx context.Context, client cw.ClientWrapped[T]) error) error {
+		// label := GetPrometheusClientLabel(ctx, client)
+		label := client.GetClientId()
 		start := time.Now()
 		requestsTotal.WithLabelValues(label).Inc()
 

@@ -1,44 +1,48 @@
 package clientPool
 
-import "time"
+import (
+	"time"
 
-func (c *ClientPool[T]) roundRobin() (*clientWrapper[T], error) {
+	"github.com/bighu630/clientPool/clientWrapper"
+)
+
+func (c *ClientPool[T]) roundRobin() (clientWrapper.ClientWrapped[T], error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	var client *clientWrapper[T]
+	var client clientWrapper.ClientWrapped[T]
 	if len(c.clients) == 0 {
 		return client, NotAvailableClientError
 	}
 	for i := 0; i < len(c.clients); i++ {
 		cw := c.clients[c.index%len(c.clients)]
 		c.index++
-		if cw.unavailable && time.Since(cw.lastFail) > c.cooldown {
-			cw.resetAvailable()
+		if cw.IsUnavailable() && time.Since(cw.GetLastFail()) > c.cooldown {
+			cw.ResetAvailable()
 		}
-		if !cw.isUnavailable() {
+		if !cw.IsUnavailable() {
 			return cw, nil
 		}
 	}
 	return client, NotAvailableClientError
 }
 
-func (c *ClientPool[T]) weightedRandom() (*clientWrapper[T], error) {
+func (c *ClientPool[T]) weightedRandom() (clientWrapper.ClientWrapped[T], error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	var zero *clientWrapper[T]
+	var zero clientWrapper.ClientWrapped[T]
 	if len(c.clients) == 0 {
 		return zero, NotAvailableClientError
 	}
 
 	// 计算总权重
 	total := 0
-	validClients := make([]*clientWrapper[T], 0)
+	validClients := make([]clientWrapper.ClientWrapped[T], 0)
 	for _, cw := range c.clients {
-		if cw.unavailable && time.Since(cw.lastFail) > c.cooldown {
-			cw.resetAvailable()
+		if cw.IsUnavailable() && time.Since(cw.GetLastFail()) > c.cooldown {
+			cw.ResetAvailable()
 		}
-		if !cw.unavailable {
-			total += cw.Weight
+		if !cw.IsUnavailable() {
+			total += cw.GetWight()
 			validClients = append(validClients, cw)
 		}
 	}
@@ -50,7 +54,7 @@ func (c *ClientPool[T]) weightedRandom() (*clientWrapper[T], error) {
 	r := c.rand.Intn(total)
 	sum := 0
 	for _, cw := range validClients {
-		sum += cw.Weight
+		sum += cw.GetWight()
 		if r < sum {
 			return cw, nil
 		}
@@ -59,18 +63,18 @@ func (c *ClientPool[T]) weightedRandom() (*clientWrapper[T], error) {
 	return zero, NotAvailableClientError
 }
 
-func (c *ClientPool[T]) random() (*clientWrapper[T], error) {
+func (c *ClientPool[T]) random() (clientWrapper.ClientWrapped[T], error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	var client *clientWrapper[T]
+	var client clientWrapper.ClientWrapped[T]
 	if len(c.clients) == 0 {
 		return client, NotAvailableClientError
 	}
 	cw := c.clients[c.rand.Intn(len(c.clients))]
-	if cw.unavailable && time.Since(cw.lastFail) > c.cooldown {
-		cw.resetAvailable()
+	if cw.IsUnavailable() && time.Since(cw.GetLastFail()) > c.cooldown {
+		cw.ResetAvailable()
 	}
-	if !cw.isUnavailable() {
+	if !cw.IsUnavailable() {
 		return cw, nil
 	}
 	return client, NotAvailableClientError

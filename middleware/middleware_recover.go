@@ -3,10 +3,12 @@ package middleware
 import (
 	"context"
 	"fmt"
+
+	cw "github.com/bighu630/clientPool/clientWrapper"
 )
 
 func RecoverMiddleware[T any]() Middleware[T] {
-	return WrapMiddleware(func(ctx context.Context, client T, next func(ctx context.Context, client T) error) (err error) {
+	return WrapMiddleware(func(ctx context.Context, client cw.ClientWrapped[T], next func(ctx context.Context, client cw.ClientWrapped[T]) error) (err error) {
 		// 捕获 panic
 		defer func() {
 			if r := recover(); r != nil {

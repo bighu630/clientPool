@@ -57,7 +57,7 @@ func TestClientPool_BasicFunctionality(t *testing.T) {
 		{Name: "client3", Client: &http.Client{Timeout: 10 * time.Second}, URL: "https://www.bilibili.com"},
 	}
 	for i, client := range clients {
-		pool.AddClient(client, i+1)
+		pool.AddClient(client, client.Name, i+1)
 	}
 
 	testFn := func(ctx context.Context, client *HTTPClient) error {
@@ -107,8 +107,8 @@ func TestClientPool_CircuitBreaker(t *testing.T) {
 
 	normal := &HTTPClient{Name: "normal_client", Client: &http.Client{Timeout: 10 * time.Second}, URL: "https://www.bilibili.com"}
 	failing := &HTTPClient{Name: "failing_client", Client: &http.Client{Timeout: 1 * time.Millisecond}, URL: "https://httpstat.us/500"}
-	pool.AddClient(normal, 1)
-	pool.AddClient(failing, 1)
+	pool.AddClient(normal, "normal_client", 1)
+	pool.AddClient(failing, "failing_client", 1)
 
 	testFn := func(ctx context.Context, client *HTTPClient) error {
 		return client.Get(ctx)
@@ -141,7 +141,7 @@ func TestClientPool_Concurrency(t *testing.T) {
 		{Name: "concurrent_client_3", Client: &http.Client{Timeout: 10 * time.Second}, URL: "https://www.bilibili.com"},
 	}
 	for i, client := range clients {
-		pool.AddClient(client, i+1)
+		pool.AddClient(client, client.Name, i+1)
 	}
 
 	testFn := func(ctx context.Context, client *HTTPClient) error {
@@ -175,7 +175,7 @@ func TestClientPool_Concurrency(t *testing.T) {
 func TestClientPool_PanicRecovery(t *testing.T) {
 	pool := NewClientPool[*HTTPClient](3, 5*time.Second, RoundRobin)
 	panicClient := &HTTPClient{Name: "panic_client", Client: &http.Client{Timeout: 10 * time.Second}, URL: "https://www.bilibili.com"}
-	pool.AddClient(panicClient, 1)
+	pool.AddClient(panicClient, "panic_client", 1)
 	panicFn := func(ctx context.Context, client *HTTPClient) error {
 		if client.Name == "panic_client" {
 			panic("test panic")
@@ -196,7 +196,7 @@ func BenchmarkClientPool(b *testing.B) {
 	pool := NewClientPool[*HTTPClient](3, 5*time.Second, RoundRobin)
 	pool.RegisterMiddleware(middleware.NewRateLimiterMiddleware[*HTTPClient](1000, 2000, 100*time.Millisecond))
 	benchClient := &HTTPClient{Name: "bench_client", Client: &http.Client{Timeout: 10 * time.Second}, URL: "https://www.bilibili.com"}
-	pool.AddClient(benchClient, 1)
+	pool.AddClient(benchClient, benchClient.Name, 1)
 	testFn := func(ctx context.Context, client *HTTPClient) error {
 		time.Sleep(1 * time.Millisecond)
 		return nil

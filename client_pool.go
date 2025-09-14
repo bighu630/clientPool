@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/bighu630/clientPool/clientWrapper"
 	"github.com/bighu630/clientPool/middleware"
 )
 
@@ -22,7 +23,7 @@ const (
 
 type ClientPool[T any] struct {
 	mu              sync.RWMutex
-	clients         []*clientWrapper[T]
+	clients         []clientWrapper.ClientWrapped[T]
 	index           int
 	rand            *rand.Rand
 	maxFails        int           // 最大失败次数
@@ -44,13 +45,13 @@ func NewClientPool[T any](maxFails int, cooldown time.Duration, defaultBalancer 
 }
 
 // 添加client, if weight <= 0, weight = 1
-func (c *ClientPool[T]) AddClient(client T, weight int) {
+func (c *ClientPool[T]) AddClient(client T, id string, weight int) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if weight <= 0 {
 		weight = 1
 	}
-	c.clients = append(c.clients, newClientWrapper(client, weight))
+	c.clients = append(c.clients, clientWrapper.NewClientWrapper(client, id, weight))
 }
 
 // middleware需要有序添加
@@ -60,14 +61,14 @@ func (c *ClientPool[T]) RegisterMiddleware(middleware middleware.Middleware[T]) 
 	c.middlewares = append(c.middlewares, middleware)
 }
 
-func (c *ClientPool[T]) executeWithMiddleware(ctx context.Context, client T, fn func(ctx context.Context, client T) error) error {
-	handler := func(ctx context.Context, client T) error {
-		return fn(ctx, client)
+func (c *ClientPool[T]) executeWithMiddleware(ctx context.Context, client clientWrapper.ClientWrapped[T], fn func(ctx context.Context, client T) error) error {
+	handler := func(ctx context.Context, client clientWrapper.ClientWrapped[T]) error {
+		return fn(ctx, client.GetClient())
 	}
 	for i := len(c.middlewares) - 1; i >= 0; i-- {
 		next := handler
 		m := c.middlewares[i]
-		handler = func(ctx context.Context, client T) error {
+		handler = func(ctx context.Context, client clientWrapper.ClientWrapped[T]) error {
 			return m.Execute(ctx, client, next)
 		}
 	}
@@ -91,11 +92,11 @@ func (c *ClientPool[T]) DoRandomClient(ctx context.Context, fn func(ctx context.
 	if err != nil {
 		return err
 	}
-	err = c.executeWithMiddleware(ctx, clientWrapper.getClient(), fn)
+	err = c.executeWithMiddleware(ctx, clientWrapper, fn)
 	if err != nil {
-		clientWrapper.markFail(c.maxFails)
+		clientWrapper.MarkFail(c.maxFails)
 	} else {
-		clientWrapper.markSuccess()
+		clientWrapper.MarkSuccess()
 	}
 	return err
 }
@@ -106,11 +107,11 @@ func (c *ClientPool[T]) DoRoundRobinClient(ctx context.Context, fn func(ctx cont
 	if err != nil {
 		return err
 	}
-	err = c.executeWithMiddleware(ctx, clientWrapper.getClient(), fn)
+	err = c.executeWithMiddleware(ctx, clientWrapper, fn)
 	if err != nil {
-		clientWrapper.markFail(c.maxFails)
+		clientWrapper.MarkFail(c.maxFails)
 	} else {
-		clientWrapper.markSuccess()
+		clientWrapper.MarkSuccess()
 	}
 	return err
 }
@@ -121,11 +122,11 @@ func (c *ClientPool[T]) DoWeightedRandomClient(ctx context.Context, fn func(ctx 
 	if err != nil {
 		return err
 	}
-	err = c.executeWithMiddleware(ctx, clientWrapper.getClient(), fn)
+	err = c.executeWithMiddleware(ctx, clientWrapper, fn)
 	if err != nil {
-		clientWrapper.markFail(c.maxFails)
+		clientWrapper.MarkFail(c.maxFails)
 	} else {
-		clientWrapper.markSuccess()
+		clientWrapper.MarkSuccess()
 	}
 	return err
 }

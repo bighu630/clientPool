@@ -67,7 +67,7 @@ func main() {
 	}
 	fmt.Println("➕ Adding clients to pool...")
 	for i, client := range clients {
-		pool.AddClient(client, i+1)
+		pool.AddClient(client, client.Name, i+1)
 		fmt.Printf("   Added %s with weight %d\n", client.Name, i+1)
 	}
 
@@ -78,7 +78,7 @@ func main() {
 	}
 
 	fmt.Println("\n🔄 Demo 1: Round Robin Load Balancing")
-	for i := 0; i < 6; i++ {
+	for i := range 6 {
 		ctx := context.Background()
 		ctx = context.WithValue(ctx, middleware.PrometheusClientKey{}, fmt.Sprintf("rr-%s", clients[i%len(clients)].Name))
 		fmt.Printf("Request %d: ", i+1)
@@ -90,7 +90,7 @@ func main() {
 	}
 
 	fmt.Println("\n🎲 Demo 2: Weighted Random Load Balancing")
-	for i := 0; i < 6; i++ {
+	for i := range 6 {
 		ctx := context.Background()
 		ctx = context.WithValue(ctx, middleware.PrometheusClientKey{}, fmt.Sprintf("wr-%s", clients[i%len(clients)].Name))
 		fmt.Printf("Request %d: ", i+1)
@@ -102,7 +102,7 @@ func main() {
 	}
 
 	fmt.Println("\n⚖️ Demo 3: Using Default Balancer (Round Robin)")
-	for i := 0; i < 6; i++ {
+	for i := range 6 {
 		ctx := context.Background()
 		ctx = context.WithValue(ctx, middleware.PrometheusClientKey{}, fmt.Sprintf("def-%s", clients[i%len(clients)].Name))
 		fmt.Printf("Request %d: ", i+1)
@@ -117,12 +117,12 @@ func main() {
 	circuitPool := clientpool.NewClientPool[*HTTPClient](2, 3*time.Second, clientpool.RoundRobin)
 	normal := &HTTPClient{Name: "normal", Client: &http.Client{Timeout: 10 * time.Second}, URL: "https://www.bilibili.com"}
 	failing := &HTTPClient{Name: "failing", Client: &http.Client{Timeout: 1 * time.Millisecond}, URL: "https://httpstat.us/500"}
-	circuitPool.AddClient(normal, 1)
-	circuitPool.AddClient(failing, 1)
+	circuitPool.AddClient(normal, normal.Name, 1)
+	circuitPool.AddClient(failing, failing.Name, 1)
 	circuitBusinessLogic := func(ctx context.Context, client *HTTPClient) error {
 		return client.Get(ctx)
 	}
-	for i := 0; i < 8; i++ {
+	for i := range 8 {
 		ctx := context.Background()
 		ctx = context.WithValue(ctx, middleware.PrometheusClientKey{}, fmt.Sprintf("circuit-%s", []string{"normal", "failing"}[i%2]))
 		fmt.Printf("Circuit test request %d: ", i+1)
@@ -136,7 +136,7 @@ func main() {
 	fmt.Println("\n💥 Demo 5: Panic Recovery")
 	panicPool := clientpool.NewClientPool[*HTTPClient](3, 5*time.Second, clientpool.RoundRobin)
 	panicClient := &HTTPClient{Name: "panic-client", Client: &http.Client{Timeout: 10 * time.Second}, URL: "https://www.bilibili.com"}
-	panicPool.AddClient(panicClient, 1)
+	panicPool.AddClient(panicClient, panicClient.Name, 1)
 	panicLogic := func(ctx context.Context, client *HTTPClient) error {
 		if client.Name == "panic-client" {
 			panic("intentional panic for testing")
