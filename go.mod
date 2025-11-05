@@ -3,7 +3,7 @@ module github.com/bighu630/clientPool
 go 1.24.5
 
 require (
-	github.com/google/uuid v1.6.0
+	github.com/avast/retry-go/v4 v4.7.0
 	github.com/prometheus/client_golang v1.23.2
 	golang.org/x/time v0.13.0
 )
