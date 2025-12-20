@@ -2,6 +2,29 @@
 
 一个用 Go 语言实现的高性能、功能丰富的客户端连接池，支持负载均衡、熔断器、限流、监控和链路追踪等企业级特性。
 
+## 目录
+
+- [特性](#特性)
+- [快速开始](#快速开始)
+  - [安装依赖](#安装依赖)
+  - [基本使用](#基本使用)
+- [详细功能](#详细功能)
+  - [负载均衡](#负载均衡)
+  - [熔断器](#熔断器)
+  - [中间件系统](#中间件系统)
+  - [自定义中间件](#自定义中间件)
+- [代码生成工具 (CodeGen)](#代码生成工具-codegen)
+  - [安装](#安装)
+  - [基本使用](#基本使用-1)
+  - [命令行参数](#命令行参数)
+  - [使用示例](#使用示例)
+  - [生成的代码特性](#生成的代码特性)
+  - [特性说明](#特性说明)
+  - [完整示例](#完整示例)
+- [完整示例项目](#完整示例项目)
+- [运行测试](#运行测试)
+- [最佳实践](#最佳实践)
+
 ## 特性
 
 - 🔄 **多种负载均衡算法**：轮询、加权随机、随机
@@ -186,7 +209,7 @@ loggingMiddleware := middleware.WrapMiddleware(
 pool.RegisterMiddleware(loggingMiddleware)
 ```
 
-## 完整示例
+## 完整示例项目
 
 查看 `example/main.go` 获取完整的使用示例，包括：
 
@@ -245,41 +268,165 @@ go test -bench=.
    - 请求耗时过长
    - 熔断器频繁触发
 
-## 代码生成工具
+## 代码生成工具 (CodeGen)
 
-为了简化客户端包装代码的编写，本项目提供了自动代码生成工具。详细文档请查看 [codegen/README.md](codegen/README.md)。
+为了简化客户端包装代码的编写，本项目提供了自动代码生成工具，可以自动分析接口或结构体，生成完整的连接池包装代码。
 
-### 快速开始
+### 安装
 
 ```bash
-# 安装代码生成工具
-go install github.com/bighu630/clientPool/cmd/codegen@latest
-
-# 生成包装代码
-codegen \
-  -package=github.com/your/project/rpc \
-  -type=Client \
-  -wrapper=MultiRPCClient \
-  -client=*rpc.Client \
-  -output=./generated/multi_rpc_client.go
+# 编译代码生成工具
+go build -o codeGen ./cmd/codegen
 ```
 
-生成的代码会自动包含：
-- 连接池管理
-- Prometheus 监控（按方法统计）
-- Context 传递
-- 错误处理
+### 基本使用
 
-示例生成代码：
+只需要两个必需参数：
+
+```bash
+./codeGen \
+  -package=github.com/your/project/client \
+  -client='*client.RPCClient'
+```
+
+工具会自动：
+- 从 `-client` 参数提取类型名（如 `RPCClient`）
+- 生成包装器名称（如 `RPCClientPool`）
+- 生成包名（如 `rpcclient_pool`）
+- 创建输出文件（如 `./generated/rpcclient_pool/client.go`）
+
+### 命令行参数
+
+```bash
+codeGen [选项]
+
+必需参数:
+  -package string
+        源接口或结构体的包路径 (如: github.com/your/project/rpc)
+  -client string
+        客户端类型 (如: *rpc.Client 或 codegen.It)
+
+可选参数:
+  -type string
+        源接口或结构体名称 (默认从 -client 自动推断)
+  -wrapper string
+        生成的包装器名称 (默认: 类型名+Pool，如 ItPool)
+  -output string
+        输出文件路径 (默认: ./generated/{类型名}_pool/client.go)
+  -pool string
+        客户端池字段名 (默认: pool)
+  -prometheus
+        是否包含 Prometheus 监控 (默认: true)
+```
+
+### 使用示例
+
+#### 示例 1: 接口类型（最简化）
+
+```bash
+./codegen -package=github.com/bighu630/clientPool/codegen -client='codegen.It'
+```
+
+生成：
+- 包名: `it_pool`
+- 结构体: `ItPool`
+- 文件: `./generated/it_pool/client.go`
+
+#### 示例 2: 结构体指针类型
+
+```bash
+./codegen -package=github.com/bighu630/clientPool/codegen -client='*codegen.St'
+```
+
+生成：
+- 包名: `st_pool`
+- 结构体: `StPool`
+- 文件: `./generated/st_pool/client.go`
+
+#### 示例 3: 自定义包装器名称
+
+```bash
+./codegen \
+  -package=github.com/your/rpc \
+  -client='*rpc.Client' \
+  -wrapper=MultiRPC \
+  -output=./pkg/rpc_pool/client.go
+```
+
+### 生成的代码特性
+
+工具会自动生成包含以下功能的完整代码：
 
 ```go
-func (m *MultiRPCClient) GetSlot(ctx context.Context, commitment string) (slot uint64, err error) {
-    ctx = context.WithValue(ctx, middleware.PrometheusMethodKey{}, "get_slot")
-    err = m.pool.Do(ctx, func(ctx context.Context, client *rpc.Client) error {
-        slot, err = client.GetSlot(ctx, commitment)
-        return err
+// 1. 结构体定义
+type ItPool struct {
+    pool *clientPool.ClientPool[codegen.It]
+}
+
+// 2. 构造函数
+func NewItPool(maxFails int, cooldown time.Duration, balancer clientPool.BalancerType) *ItPool
+
+// 3. 客户端管理方法
+func (p *ItPool) AddClient(client codegen.It, name string, weight int)
+func (p *ItPool) RegisterMiddleware(mw middleware.Middleware[codegen.It])
+
+// 4. 自动包装所有公开方法
+func (m *ItPool) InterfaceTest1(a int, b string) error {
+    ctx := context.WithValue(context.Background(), middleware.PrometheusMethodKey{}, "interface_test1")
+    ret0 = m.pool.Do(ctx, func(ctx context.Context, client codegen.It) error {
+        ret0 = client.InterfaceTest1(a, b)
+        return ret0
     })
     return
+}
+```
+
+### 特性说明
+
+生成的代码包含：
+
+✅ **自动类型推断** - 从 `-client` 参数自动提取类型信息  
+✅ **连接池管理** - 完整的客户端池初始化和管理  
+✅ **Prometheus 监控** - 每个方法自动添加方法级监控（可选）  
+✅ **Context 传递** - 自动检测和传递 context 参数  
+✅ **错误处理** - 正确处理多返回值中的 error  
+✅ **方法包装** - 自动分析并包装所有公开方法  
+✅ **导入管理** - 自动处理所有必需的导入  
+
+### 完整示例
+
+```bash
+# 1. 生成代码
+./codegen -package=github.com/bighu630/clientPool/codegen -client='codegen.It'
+
+# 2. 使用生成的代码
+package main
+
+import (
+    "context"
+    "time"
+    
+    clientpool "github.com/bighu630/clientPool"
+    "your/project/generated/it_pool"
+)
+
+func main() {
+    // 创建连接池
+    pool := it_pool.NewItPool(
+        3,                        // 最大失败次数
+        5*time.Second,           // 熔断恢复时间
+        clientpool.RoundRobin,   // 负载均衡策略
+    )
+    
+    // 添加客户端
+    client1 := &YourItImplementation{}
+    pool.AddClient(client1, "client-1", 1)
+    
+    // 直接调用方法
+    err := pool.InterfaceTest1(1, "test")
+    if err != nil {
+        panic(err)
+    }
 }
 ```
 

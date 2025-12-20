@@ -41,7 +41,9 @@ func init() {
 	prometheus.MustRegister(requestsTotal, requestDuration, requestErrors)
 }
 
+// 弃用
 type PrometheusClientKey struct{} // 弃用
+
 type PrometheusMethodKey struct{}
 
 // 从 context 获取 client label
@@ -54,14 +56,6 @@ func GetPrometheusClientLabel(ctx context.Context, client any) []string {
 		labels = append(labels, fmt.Sprintf("%v", v))
 	}
 	return labels
-}
-
-// GetPrometheusMethodName 从 context 获取方法名
-func GetPrometheusMethodName(ctx context.Context) string {
-	if v := ctx.Value(PrometheusMethodKey{}); v != nil {
-		return fmt.Sprintf("%v", v)
-	}
-	return "unknown"
 }
 
 // PrometheusMiddleware 实现
@@ -84,7 +78,6 @@ func NewPrometheusMiddleware[T any]() Middleware[T] {
 		if err != nil {
 			requestErrors.WithLabelValues(labels...).Inc()
 		}
-
 		return err
 	})
 }

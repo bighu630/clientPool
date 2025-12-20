@@ -109,11 +109,14 @@ func (g *Generator) parseType() error {
 	var methodSet *types.MethodSet
 	switch t := obj.Type().(type) {
 	case *types.Named:
-		// 对于命名类型，获取指针类型的方法集（包含值接收者和指针接收者的方法）
-		methodSet = types.NewMethodSet(types.NewPointer(t))
-	case *types.Interface:
-		// 对于接口，直接获取方法集
-		methodSet = types.NewMethodSet(t)
+		// 对于命名类型，检查底层是否为接口
+		if _, ok := t.Underlying().(*types.Interface); ok {
+			// 接口类型，直接使用类型本身
+			methodSet = types.NewMethodSet(t)
+		} else {
+			// 结构体等类型，获取指针类型的方法集（包含值接收者和指针接收者的方法）
+			methodSet = types.NewMethodSet(types.NewPointer(t))
+		}
 	default:
 		return fmt.Errorf("unsupported type: %T", t)
 	}
@@ -256,6 +259,7 @@ func (g *Generator) generateCode() error {
 		WrapperName      string
 		PoolFieldName    string
 		ClientType       string
+		SourcePackage    string
 		Methods          []MethodInfo
 		EnablePrometheus bool
 	}{
@@ -264,6 +268,7 @@ func (g *Generator) generateCode() error {
 		WrapperName:      g.config.WrapperName,
 		PoolFieldName:    g.config.PoolFieldName,
 		ClientType:       g.config.ClientType,
+		SourcePackage:    g.config.PackagePath,
 		Methods:          g.methods,
 		EnablePrometheus: g.config.EnablePrometheus,
 	}
@@ -277,6 +282,8 @@ func (g *Generator) generateCode() error {
 		"paramNames":         g.paramNames,
 		"resultList":         g.resultList,
 		"resultNames":        g.resultNames,
+		"nonErrorResults":    g.nonErrorResults,
+		"getErrorResultName": g.getErrorResultName,
 		"hasMultipleReturns": func(m MethodInfo) bool { return len(m.Results) > 1 },
 	}).Parse(wrapperTemplate))
 
@@ -289,15 +296,30 @@ func (g *Generator) generateCode() error {
 
 // getImportList 获取导入列表
 func (g *Generator) getImportList() []string {
-	imports := []string{"context"}
+	imports := []string{
+		"context",
+		"time",
+		"github.com/bighu630/clientPool",
+		"github.com/bighu630/clientPool/middleware",
+	}
 
-	if g.config.EnablePrometheus {
-		imports = append(imports, "github.com/bighu630/clientPool/middleware")
+	// 添加源类型的包（如果不在当前包）
+	if g.config.PackagePath != "" {
+		outputPkg := filepath.Base(filepath.Dir(g.config.OutputPath))
+		sourcePkg := filepath.Base(g.config.PackagePath)
+
+		// 如果源包和输出包不同，需要导入源包
+		if outputPkg != sourcePkg {
+			imports = append(imports, g.config.PackagePath)
+		}
 	}
 
 	// 添加从类型分析中收集的导入
 	for imp := range g.imports {
-		if imp != "" && imp != "context" {
+		if imp != "" && imp != "context" &&
+			imp != "github.com/bighu630/clientPool" &&
+			imp != "github.com/bighu630/clientPool/middleware" &&
+			imp != g.config.PackagePath {
 			imports = append(imports, imp)
 		}
 	}
@@ -344,6 +366,25 @@ func (g *Generator) resultNames(results []ParamInfo) string {
 	return strings.Join(parts, ", ")
 }
 
+// nonErrorResults 生成非错误的返回值名称列表
+func (g *Generator) nonErrorResults(m MethodInfo) string {
+	var parts []string
+	for i, r := range m.Results {
+		if i != m.ErrorResultIdx {
+			parts = append(parts, r.Name)
+		}
+	}
+	return strings.Join(parts, ", ")
+}
+
+// getErrorResultName 获取error返回值的名称
+func (g *Generator) getErrorResultName(m MethodInfo) string {
+	if m.HasError && m.ErrorResultIdx >= 0 && m.ErrorResultIdx < len(m.Results) {
+		return m.Results[m.ErrorResultIdx].Name
+	}
+	return ""
+}
+
 // toSnakeCase 转换为蛇形命名
 func toSnakeCase(s string) string {
 	var result []rune
@@ -365,14 +406,36 @@ import (
 {{end}}
 )
 
+// MultiSt wraps multiple clients with load balancing and middleware support
+type {{.WrapperName}} struct {
+	{{.PoolFieldName}} *clientPool.ClientPool[{{.ClientType}}]
+}
+
+// New{{.WrapperName}} creates a new {{.WrapperName}} instance
+func New{{.WrapperName}}(maxFails int, cooldown time.Duration, balancer clientPool.BalancerType) *{{.WrapperName}} {
+	return &{{.WrapperName}}{
+		{{.PoolFieldName}}: clientPool.NewClientPool[{{.ClientType}}](maxFails, cooldown, balancer),
+	}
+}
+
+// AddClient adds a client to the pool with a name and weight
+func (m *{{.WrapperName}}) AddClient(client {{.ClientType}}, name string, weight int) {
+	m.{{.PoolFieldName}}.AddClient(client, name, weight)
+}
+
+// RegisterMiddleware registers a middleware to the pool
+func (m *{{.WrapperName}}) RegisterMiddleware(mw middleware.Middleware[{{.ClientType}}]) {
+	m.{{.PoolFieldName}}.RegisterMiddleware(mw)
+}
+
 {{range .Methods}}
 // {{.Name}} wraps the client method with pool management and monitoring
 func ({{.ReceiverName}} *{{$.WrapperName}}) {{.Name}}({{paramList .Params}}){{if .Results}} {{resultList .Results}}{{end}} {
-{{if $.EnablePrometheus}}	{{if .HasContext}}ctx{{else}}_ctx{{end}} = context.WithValue({{if .HasContext}}ctx{{else}}context.Background(){{end}}, middleware.PrometheusMethodKey{}, "{{toSnakeCase .Name}}")
-{{end}}	{{if .HasError}}{{if .Results}}{{resultNames .Results}} = {{end}}{{$.PoolFieldName}}.Do({{if .HasContext}}ctx{{else}}context.Background(){{end}}, func(ctx context.Context, client {{$.ClientType}}) error {
-		{{if gt (len .Results) 1}}{{range $idx, $r := .Results}}{{if ne $idx $.ErrorResultIdx}}{{$r.Name}}, {{end}}{{end}}{{end}}err{{if eq (len .Results) 1}} :{{end}}= client.{{.Name}}({{paramNames .Params}})
-		return err
-	}){{else}}{{$.PoolFieldName}}.Do({{if .HasContext}}ctx{{else}}context.Background(){{end}}, func(ctx context.Context, client {{$.ClientType}}) error {
+{{if $.EnablePrometheus}}	{{if .HasContext}}ctx = context.WithValue(ctx, middleware.PrometheusMethodKey{}, "{{toSnakeCase .Name}}"){{else}}ctx := context.WithValue(context.Background(), middleware.PrometheusMethodKey{}, "{{toSnakeCase .Name}}"){{end}}
+{{end}}	{{if .HasError}}{{getErrorResultName .}} = {{.ReceiverName}}.{{$.PoolFieldName}}.Do({{if .HasContext}}ctx{{else}}ctx{{end}}, func(ctx context.Context, client {{$.ClientType}}) error {
+		{{$nonErr := nonErrorResults .}}{{if $nonErr}}{{$nonErr}}, {{end}}{{getErrorResultName .}} = client.{{.Name}}({{paramNames .Params}})
+		return {{getErrorResultName .}}
+	}){{else}}{{.ReceiverName}}.{{$.PoolFieldName}}.Do({{if .HasContext}}ctx{{else}}ctx{{end}}, func(ctx context.Context, client {{$.ClientType}}) error {
 		{{if .Results}}{{resultNames .Results}} = {{end}}client.{{.Name}}({{paramNames .Params}})
 		return nil
 	}){{end}}
