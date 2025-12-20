@@ -57,7 +57,7 @@ func main() {
 	// 创建客户端池，泛型为 *HTTPClient
 	pool := clientpool.NewClientPool[*HTTPClient](3, 5*time.Second, clientpool.RoundRobin)
 	fmt.Println("🔧 Registering middlewares...")
-	pool.RegisterMiddleware(middleware.PrometheusMiddleware[*HTTPClient]())
+	pool.RegisterMiddleware(middleware.NewPrometheusMiddleware[*HTTPClient]())
 	pool.RegisterMiddleware(middleware.NewRateLimiterMiddleware[*HTTPClient](5, 10, 2*time.Second))
 
 	clients := []*HTTPClient{

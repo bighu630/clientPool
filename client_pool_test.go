@@ -48,7 +48,7 @@ func startPrometheusServer() {
 func TestClientPool_BasicFunctionality(t *testing.T) {
 	startPrometheusServer()
 	pool := NewClientPool[*HTTPClient](3, 5*time.Second, RoundRobin)
-	pool.RegisterMiddleware(middleware.PrometheusMiddleware[*HTTPClient]())
+	pool.RegisterMiddleware(middleware.NewPrometheusMiddleware[*HTTPClient]())
 	pool.RegisterMiddleware(middleware.NewRateLimiterMiddleware[*HTTPClient](5, 10, 2*time.Second))
 
 	clients := []*HTTPClient{
@@ -103,7 +103,7 @@ func TestClientPool_BasicFunctionality(t *testing.T) {
 
 func TestClientPool_CircuitBreaker(t *testing.T) {
 	pool := NewClientPool[*HTTPClient](2, 3*time.Second, RoundRobin)
-	pool.RegisterMiddleware(middleware.PrometheusMiddleware[*HTTPClient]())
+	pool.RegisterMiddleware(middleware.NewPrometheusMiddleware[*HTTPClient]())
 
 	normal := &HTTPClient{Name: "normal_client", Client: &http.Client{Timeout: 10 * time.Second}, URL: "https://www.bilibili.com"}
 	failing := &HTTPClient{Name: "failing_client", Client: &http.Client{Timeout: 1 * time.Millisecond}, URL: "https://httpstat.us/500"}

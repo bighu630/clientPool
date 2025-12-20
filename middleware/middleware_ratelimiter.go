@@ -20,7 +20,6 @@ func NewRateLimiterMiddleware[T any](r, b int, timeOut time.Duration) Middleware
 		limiter: rate.NewLimiter(rate.Limit(r), b),
 		timeOut: timeOut,
 	}
-
 }
 
 func (r *RateLimiterMiddleware[T]) Execute(ctx context.Context, client cw.ClientWrapped[T], next func(ctx context.Context, client cw.ClientWrapped[T]) error) error {
