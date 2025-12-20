@@ -7,12 +7,12 @@
 - 🔄 **多种负载均衡算法**：轮询、加权随机、随机
 - 🚨 **熔断器机制**：自动检测和恢复故障客户端
 - 🛡️ **限流保护**：基于令牌桶算法的流量控制
-- 📊 **Prometheus 监控**：内置指标收集
-- 🔍 **链路追踪**：自动生成和传递 TraceID
+- 📊 **Prometheus 监控**：内置指标收集（支持按方法统计）
 - 💥 **Panic 恢复**：自动捕获和处理 panic
 - 🧵 **线程安全**：支持高并发访问
 - 🔧 **泛型支持**：支持任意类型的客户端
 - 📈 **中间件架构**：灵活可扩展的中间件系统
+- 🤖 **代码生成工具**：自动生成客户端包装代码
 
 ## 快速开始
 
@@ -244,6 +244,44 @@ go test -bench=.
    - 错误率过高
    - 请求耗时过长
    - 熔断器频繁触发
+
+## 代码生成工具
+
+为了简化客户端包装代码的编写，本项目提供了自动代码生成工具。详细文档请查看 [codegen/README.md](codegen/README.md)。
+
+### 快速开始
+
+```bash
+# 安装代码生成工具
+go install github.com/bighu630/clientPool/cmd/codegen@latest
+
+# 生成包装代码
+codegen \
+  -package=github.com/your/project/rpc \
+  -type=Client \
+  -wrapper=MultiRPCClient \
+  -client=*rpc.Client \
+  -output=./generated/multi_rpc_client.go
+```
+
+生成的代码会自动包含：
+- 连接池管理
+- Prometheus 监控（按方法统计）
+- Context 传递
+- 错误处理
+
+示例生成代码：
+
+```go
+func (m *MultiRPCClient) GetSlot(ctx context.Context, commitment string) (slot uint64, err error) {
+    ctx = context.WithValue(ctx, middleware.PrometheusMethodKey{}, "get_slot")
+    err = m.pool.Do(ctx, func(ctx context.Context, client *rpc.Client) error {
+        slot, err = client.GetSlot(ctx, commitment)
+        return err
+    })
+    return
+}
+```
 
 ## 贡献
 
