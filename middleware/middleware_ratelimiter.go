@@ -24,7 +24,7 @@ func NewRateLimiterMiddleware[T any](r, b int, timeOut time.Duration) Middleware
 
 func (r *RateLimiterMiddleware[T]) Execute(ctx context.Context, client cw.ClientWrapped[T], next func(ctx context.Context, client cw.ClientWrapped[T]) error) error {
 	if r.timeOut > 0 {
-		waitCtx, cancel := context.WithTimeout(ctx, r.timeOut)
+		waitCtx, cancel := context.WithTimeout(context.Background(), r.timeOut) // reta 的timeout用自己独立的ctx
 		defer cancel()
 		if err := r.limiter.Wait(waitCtx); err != nil {
 			return err
