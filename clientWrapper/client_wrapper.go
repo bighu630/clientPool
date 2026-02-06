@@ -85,5 +85,5 @@ func (c *clientWrapped[T]) GetWight() int {
 func (c *clientWrapped[T]) IsUnavailable() bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return c.unavailable
+	return c.unavailable && c.failCount > 0
 }

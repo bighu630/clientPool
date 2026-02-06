@@ -11,7 +11,7 @@ import (
 	"github.com/bighu630/clientPool/middleware"
 )
 
-var NotAvailableClientError = errors.New("not available client")
+var NoAvailableClientError = errors.New("no available client")
 
 type BalancerType string
 

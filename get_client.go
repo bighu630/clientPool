@@ -11,7 +11,7 @@ func (c *ClientPool[T]) roundRobin() (clientWrapper.ClientWrapped[T], error) {
 	defer c.mu.RUnlock()
 	var client clientWrapper.ClientWrapped[T]
 	if len(c.clients) == 0 {
-		return client, NotAvailableClientError
+		return client, NoAvailableClientError
 	}
 	for i := 0; i < len(c.clients); i++ {
 		cw := c.clients[c.index%len(c.clients)]
@@ -23,7 +23,7 @@ func (c *ClientPool[T]) roundRobin() (clientWrapper.ClientWrapped[T], error) {
 			return cw, nil
 		}
 	}
-	return client, NotAvailableClientError
+	return client, NoAvailableClientError
 }
 
 func (c *ClientPool[T]) weightedRandom() (clientWrapper.ClientWrapped[T], error) {
@@ -31,7 +31,7 @@ func (c *ClientPool[T]) weightedRandom() (clientWrapper.ClientWrapped[T], error)
 	defer c.mu.RUnlock()
 	var zero clientWrapper.ClientWrapped[T]
 	if len(c.clients) == 0 {
-		return zero, NotAvailableClientError
+		return zero, NoAvailableClientError
 	}
 
 	// 计算总权重
@@ -47,7 +47,7 @@ func (c *ClientPool[T]) weightedRandom() (clientWrapper.ClientWrapped[T], error)
 		}
 	}
 	if total == 0 {
-		return zero, NotAvailableClientError
+		return zero, NoAvailableClientError
 	}
 
 	// 随机挑选
@@ -60,7 +60,7 @@ func (c *ClientPool[T]) weightedRandom() (clientWrapper.ClientWrapped[T], error)
 		}
 	}
 
-	return zero, NotAvailableClientError
+	return zero, NoAvailableClientError
 }
 
 func (c *ClientPool[T]) random() (clientWrapper.ClientWrapped[T], error) {
@@ -68,7 +68,7 @@ func (c *ClientPool[T]) random() (clientWrapper.ClientWrapped[T], error) {
 	defer c.mu.RUnlock()
 	var client clientWrapper.ClientWrapped[T]
 	if len(c.clients) == 0 {
-		return client, NotAvailableClientError
+		return client, NoAvailableClientError
 	}
 	cw := c.clients[c.rand.Intn(len(c.clients))]
 	if cw.IsUnavailable() && time.Since(cw.GetLastFail()) > c.cooldown {
@@ -77,5 +77,5 @@ func (c *ClientPool[T]) random() (clientWrapper.ClientWrapped[T], error) {
 	if !cw.IsUnavailable() {
 		return cw, nil
 	}
-	return client, NotAvailableClientError
+	return client, NoAvailableClientError
 }
