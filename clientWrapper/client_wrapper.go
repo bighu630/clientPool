@@ -48,6 +48,9 @@ func (c *clientWrapped[T]) ResetAvailable() {
 }
 
 func (c *clientWrapped[T]) MarkFail(maxFail int) {
+	if c.failCount == 0 {
+		return
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.failCount++
