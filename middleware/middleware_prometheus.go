@@ -47,26 +47,25 @@ type PrometheusClientKey struct{} // 弃用
 type PrometheusMethodKey struct{}
 
 // 从 context 获取 client label
-func GetPrometheusClientLabel(ctx context.Context, client any) []string {
-	labels := []string{}
+func GetPrometheusClientLabel(ctx context.Context, client any) (cl string, method string) {
 	if v := ctx.Value(PrometheusClientKey{}); v != nil {
-		labels = append(labels, fmt.Sprintf("%v", v))
+		cl = fmt.Sprintf("%v", v)
 	}
 	if v := ctx.Value(PrometheusMethodKey{}); v != nil {
-		labels = append(labels, fmt.Sprintf("%v", v))
+		method = fmt.Sprintf("%v", v)
 	}
-	return labels
+	return
 }
 
 // PrometheusMiddleware 实现
 func NewPrometheusMiddleware[T any]() Middleware[T] {
 	return WrapMiddleware(func(ctx context.Context, client cw.ClientWrapped[T], next func(ctx context.Context, client cw.ClientWrapped[T]) error) error {
 		var labels []string
-		labels = append(labels, client.GetClientId())
-		ctxLabels := GetPrometheusClientLabel(ctx, client)
-		if len(ctxLabels) > 0 {
-			labels = append(labels, ctxLabels...)
+		cl, method := GetPrometheusClientLabel(ctx, client)
+		if cl != "" {
+			cl = client.GetClientId()
 		}
+		labels = append(labels, cl, method)
 		start := time.Now()
 		requestsTotal.WithLabelValues(labels...).Inc()
 
