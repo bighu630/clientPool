@@ -62,7 +62,7 @@ func NewPrometheusMiddleware[T any]() Middleware[T] {
 	return WrapMiddleware(func(ctx context.Context, client cw.ClientWrapped[T], next func(ctx context.Context, client cw.ClientWrapped[T]) error) error {
 		var labels []string
 		cl, method := GetPrometheusClientLabel(ctx, client)
-		if cl != "" {
+		if cl == "" {
 			cl = client.GetClientId()
 		}
 		labels = append(labels, cl, method)

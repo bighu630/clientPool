@@ -3,6 +3,7 @@ package clientPool
 import (
 	"context"
 	"errors"
+	"io"
 	"math/rand"
 	"sync"
 	"time"
@@ -92,47 +93,58 @@ func (c *ClientPool[T]) Do(ctx context.Context, fn func(ctx context.Context, cli
 	}
 }
 
-// 轮训可用的client
-func (c *ClientPool[T]) DoRandomClient(ctx context.Context, fn func(ctx context.Context, client T) error) error {
-	clientWrapper, err := c.random()
+func (c *ClientPool[T]) doWithClient(ctx context.Context, cw clientWrapper.ClientWrapped[T], fn func(ctx context.Context, client T) error) error {
+	err := c.executeWithMiddleware(ctx, cw, fn)
 	if err != nil {
-		return err
-	}
-	err = c.executeWithMiddleware(ctx, clientWrapper, fn)
-	if err != nil {
-		clientWrapper.MarkFail(c.maxFails)
+		// 中间件自身的错误（如限流超时）不应标记客户端失败
+		if !middleware.IsMiddlewareError(err) {
+			cw.MarkFail(c.maxFails)
+		}
 	} else {
-		clientWrapper.MarkSuccess()
+		cw.MarkSuccess()
 	}
 	return err
 }
 
 // 随机选择可用的client
-func (c *ClientPool[T]) DoRoundRobinClient(ctx context.Context, fn func(ctx context.Context, client T) error) error {
-	clientWrapper, err := c.roundRobin()
+func (c *ClientPool[T]) DoRandomClient(ctx context.Context, fn func(ctx context.Context, client T) error) error {
+	cw, err := c.random()
 	if err != nil {
 		return err
 	}
-	err = c.executeWithMiddleware(ctx, clientWrapper, fn)
+	return c.doWithClient(ctx, cw, fn)
+}
+
+// 轮询选择可用的client
+func (c *ClientPool[T]) DoRoundRobinClient(ctx context.Context, fn func(ctx context.Context, client T) error) error {
+	cw, err := c.roundRobin()
 	if err != nil {
-		clientWrapper.MarkFail(c.maxFails)
-	} else {
-		clientWrapper.MarkSuccess()
+		return err
 	}
-	return err
+	return c.doWithClient(ctx, cw, fn)
 }
 
 // 按权重随机选择可用的client
 func (c *ClientPool[T]) DoWeightedRandomClient(ctx context.Context, fn func(ctx context.Context, client T) error) error {
-	clientWrapper, err := c.weightedRandom()
+	cw, err := c.weightedRandom()
 	if err != nil {
 		return err
 	}
-	err = c.executeWithMiddleware(ctx, clientWrapper, fn)
-	if err != nil {
-		clientWrapper.MarkFail(c.maxFails)
-	} else {
-		clientWrapper.MarkSuccess()
+	return c.doWithClient(ctx, cw, fn)
+}
+
+// Close 关闭池中所有实现了 io.Closer 的客户端
+func (c *ClientPool[T]) Close() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	var errs []error
+	for _, cw := range c.clients {
+		if closer, ok := any(cw.GetClient()).(io.Closer); ok {
+			if err := closer.Close(); err != nil {
+				errs = append(errs, err)
+			}
+		}
 	}
-	return err
+	c.clients = nil
+	return errors.Join(errs...)
 }

@@ -7,8 +7,8 @@ import (
 )
 
 func (c *ClientPool[T]) roundRobin() (clientWrapper.ClientWrapped[T], error) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	var client clientWrapper.ClientWrapped[T]
 	if len(c.clients) == 0 {
 		return client, NoAvailableClientError
